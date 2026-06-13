@@ -1,14 +1,42 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: enterprise-kb-postgres
+    environment:
+      POSTGRES_USER: kb_user
+      POSTGRES_PASSWORD: kb_pass
+      POSTGRES_DB: enterprise_kb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # 不映射到 host 端口（避免与主机 PG 冲突），仅容器内部网络访问
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kb_user -d enterprise_kb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   app:
     build: .
+    container_name: enterprise-kb-app
     ports:
       - "8000:8000"
     environment:
-      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-in-production}
-      - DATABASE_URL=sqlite+aiosqlite:///data/kb.db
+      # 关键：把两个 key 都注入，兼容 embedding_service 的 fallback
+      MINIMAX_CN_API_KEY: ${MINIMAX_CN_API_KEY}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-use-a-random-secret}
+      DATABASE_URL: postgresql+asyncpg://kb_user:kb_pass@postgres:5432/enterprise_kb
+      # 容器内非 root 用户不能写 /var/log，改到挂载的 /app/data/logs
+      RAG_AUDIT_DIR: /app/data/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+
+volumes:
+  pgdata:
