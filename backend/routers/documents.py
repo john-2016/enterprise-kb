@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,9 +62,17 @@ class DocumentResponse(BaseModel):
     chunk_count: int = 0
     is_indexed: bool = False
     owner_id: int
-    created_at: str
-    updated_at: str
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
     content_text: str | None = None
+
+    @field_serializer("created_at", "updated_at", when_used="json")
+    def _serialize_dt(self, v: datetime | str | None) -> str | None:
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return v
 
 
 class DocumentListResponse(BaseModel):
@@ -157,7 +165,7 @@ async def upload_document(
     chunks = chunk_text(content_text)
     chunk_count = len(chunks)
 
-    owner_id = current_user.get("sub")
+    owner_id = int(str(current_user.get("sub")).strip())
     now = datetime.now(timezone.utc)
     file_size = Path(file_path).stat().st_size
 
