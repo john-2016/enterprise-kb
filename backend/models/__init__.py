@@ -11,6 +11,7 @@ from backend.models.kb import KnowledgeBase, DocumentKB
 from backend.models.audit import AuditLog
 from backend.models.provider import ModelProvider
 from backend.models.model_config import ModelConfig
+from backend.models.ab_test import ABTestRule, ABTestMetric
 
 __all__ = [
     "Base",
@@ -21,4 +22,6 @@ __all__ = [
     "AuditLog",
     "ModelProvider",
     "ModelConfig",
+    "ABTestRule",
+    "ABTestMetric",
 ]
