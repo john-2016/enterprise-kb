@@ -10,6 +10,7 @@ from backend.models.document import Document
 from backend.models.kb import KnowledgeBase, DocumentKB
 from backend.models.audit import AuditLog
 from backend.models.provider import ModelProvider
+from backend.models.model_config import ModelConfig
 
 __all__ = [
     "Base",
@@ -19,4 +20,5 @@ __all__ = [
     "DocumentKB",
     "AuditLog",
     "ModelProvider",
+    "ModelConfig",
 ]
