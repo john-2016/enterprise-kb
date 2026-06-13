@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import os
-import pickle
 from pathlib import Path
 from typing import Any, Optional
 
@@ -261,6 +260,43 @@ class VectorStore:
         return results
 
     # ------------------------------------------------------------------
+    # Remove vectors by id prefix (H7: document deletion cleanup)
+    # ------------------------------------------------------------------
+
+    def remove_ids_with_prefix(self, prefix: str) -> int:
+        """Remove all vectors whose external id starts with *prefix*.
+
+        IndexFlatL2 不支持 in-place 删除；本方法重建索引（对中小规模库够用）。
+        Returns the number of vectors removed.
+        """
+        # 找到要删除的 external ids
+        to_remove = {eid for eid in self._id_map.keys() if eid.startswith(prefix)}
+        if not to_remove:
+            return 0
+
+        # 收集要保留的向量
+        keep_external_ids = [eid for eid in self._id_map.keys() if eid not in to_remove]
+
+        # 重建索引
+        new_index = faiss.IndexFlatL2(self.dimension)
+        if keep_external_ids:
+            # 重构被保留向量的原始数值
+            stored_vectors = []
+            for eid in keep_external_ids:
+                pos = self._id_map[eid]
+                stored_vectors.append(self.index.reconstruct(int(pos)).astype(np.float32))
+            new_index.add(np.array(stored_vectors, dtype=np.float32))
+
+        # 替换状态
+        self.index = new_index
+        self._id_map = {eid: i for i, eid in enumerate(keep_external_ids)}
+        self._reverse_map = {i: eid for i, eid in enumerate(keep_external_ids)}
+        for eid in to_remove:
+            self._metadata.pop(eid, None)
+        self._next_pos = len(keep_external_ids)
+        return len(to_remove)
+
+    # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
 
@@ -277,14 +313,16 @@ class VectorStore:
         faiss.write_index(self.index, str(path.with_suffix(".index")))
 
         meta_payload = {
+            "version": 1,
             "dimension": self.dimension,
             "id_map": self._id_map,
             "reverse_map": {str(k): v for k, v in self._reverse_map.items()},
             "metadata": self._metadata,
             "next_pos": self._next_pos,
         }
-        with open(path.with_suffix(".meta"), "wb") as f:
-            pickle.dump(meta_payload, f)
+        # 用 json 而非 pickle——避免不可信文件 RCE
+        with open(path.with_suffix(".meta"), "w", encoding="utf-8") as f:
+            json.dump(meta_payload, f, ensure_ascii=False)
 
     def load(self, path: str | Path) -> None:
         """Load a previously saved index and metadata from disk."""
@@ -304,8 +342,8 @@ class VectorStore:
         self.index = faiss.read_index(str(index_file))
         self.dimension = self.index.d
 
-        with open(meta_file, "rb") as f:
-            meta_payload = pickle.load(f)
+        with open(meta_file, "r", encoding="utf-8") as f:
+            meta_payload = json.load(f)
 
         self._id_map = meta_payload["id_map"]
         self._reverse_map = {int(k): v for k, v in meta_payload["reverse_map"].items()}

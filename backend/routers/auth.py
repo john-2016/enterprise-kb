@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.deps import get_current_user, get_db
 from backend.core.security import create_access_token, hash_password, verify_password
 from backend.services import auth_service
+from backend.config import settings
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -67,20 +68,29 @@ class TokenResponse(BaseModel):
     "/register",
     status_code=status.HTTP_201_CREATED,
     response_model=UserResponse,
-    summary="Register a new user",
+    summary="Register a new user (only when ALLOW_REGISTRATION=true)",
 )
 async def register(
     body: RegisterRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Create a new user account with the given credentials and role."""
+    """Create a new user account.
+
+    默认关闭（生产模式）；仅当 settings.ALLOW_REGISTRATION=true 时开放。
+    role 强制为 viewer（不允许在公共端点自选 admin/editor）。
+    """
+    if not settings.ALLOW_REGISTRATION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is disabled. Contact an administrator.",
+        )
     try:
         user = await auth_service.register_user(
             db=db,
             username=body.username,
             email=body.email,
             password=body.password,
-            role=body.role,
+            role="viewer",  # 强制 viewer，不接受 body.role
         )
     except auth_service.AuthError as exc:
         raise HTTPException(

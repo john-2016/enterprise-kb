@@ -13,6 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app
 COPY . .
 
+# 创建非 root 用户（L3）
+RUN groupadd -r app && useradd -r -g app app -m -d /home/app && \
+    chown -R app:app /app /home/app
+USER app
+
 # Expose
 EXPOSE 8000
 

@@ -7,6 +7,7 @@ All routes require authentication and are prefixed with ``/api/v1/documents``.
 from __future__ import annotations
 
 import os
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -32,7 +33,18 @@ from backend.config import settings
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
+logger = logging.getLogger(__name__)
+
 UPLOAD_DIR = os.environ.get("DOCUMENT_UPLOAD_DIR", "./data/uploads/")
+
+
+def _sanitize_filename(s: str) -> str:
+    """剥离控制字符、HTML 特殊字符，截断 200 字符（H6）。"""
+    import re
+    s = re.sub(r"[\x00-\x1f\x7f<>:\"\\|?*]", "", s).strip()
+    if not s:
+        s = "untitled"
+    return s[:200]
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +130,17 @@ async def upload_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+    except ValueError as exc:
+        # 文件超过 50MB（H5）
+        if "exceeds maximum size" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=str(exc),
+            ) from exc
+        raise
 
-    original_filename = file.filename or "untitled"
+    original_filename = _sanitize_filename(file.filename or "untitled")
+    title = _sanitize_filename(title) if title else None
     ext = Path(original_filename).suffix.lower().lstrip(".")
     file_type = ext if ext else "txt"
     doc_title = title or Path(original_filename).stem
@@ -339,6 +360,12 @@ async def delete_doc(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    # H7: 同步清理向量库（按 doc_<id>_chunk_ 前缀）
+    try:
+        store = _get_vector_store()
+        store.remove_ids_with_prefix(f"doc_{doc_id}_chunk_")
+    except Exception:
+        logger.exception("vector store cleanup failed for doc %s", doc_id)
 
 
 @router.post(
@@ -392,12 +419,13 @@ async def reindex_document(
     embedder = _get_embedder()
     try:
         vectors = await embedder.embed_batch(chunks)
-    except RuntimeError as exc:
-        # Don't commit partial state — text update and index must be atomic
+    except RuntimeError:
+        # 显式回滚：不让"已更新 content_text、is_indexed=FALSE"持久化
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Re-extraction succeeded but embedding failed: {exc}",
-        ) from exc
+            detail="Re-extraction succeeded but embedding failed; rolled back",
+        )
 
     store = _get_vector_store()
     chunk_ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]

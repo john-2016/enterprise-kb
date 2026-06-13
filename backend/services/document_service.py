@@ -15,6 +15,8 @@ from typing import Optional
 from fastapi import UploadFile
 from sqlalchemy import text
 
+from backend.config import settings
+
 # ---------------------------------------------------------------------------
 # Optional parser imports
 # ---------------------------------------------------------------------------
@@ -75,10 +77,33 @@ async def save_upload_file(
     safe_name = f"{uuid.uuid4().hex}{ext}"
     dest = upload_dir / safe_name
 
-    content = await upload_file.read()
-    dest.write_bytes(content)
+    # 流式分块读取以强制大小限制（H5）
+    max_size = settings.UPLOAD_MAX_SIZE
+    chunk_size = 1024 * 1024  # 1 MB
+    total = 0
+    written = 0
+    try:
+        with dest.open("wb") as f:
+            while True:
+                chunk = await upload_file.read(chunk_size)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_size:
+                    raise ValueError(
+                        f"File exceeds maximum size of {max_size} bytes"
+                    )
+                f.write(chunk)
+                written += len(chunk)
+    except Exception:
+        # 超大文件：清理半成品
+        try:
+            dest.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
 
-    return str(dest.resolve())
+    return str(dest)
 
 
 # ---------------------------------------------------------------------------

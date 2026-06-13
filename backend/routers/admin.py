@@ -15,6 +15,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_admin_user, get_db
+from backend.routers.auth import RegisterRequest
 from backend.services import auth_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -74,6 +75,34 @@ class AuditLogResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/users",
+    status_code=status.HTTP_201_CREATED,
+    response_model=UserAdminResponse,
+    summary="Create a new user (admin only)",
+)
+async def create_user(
+    body: RegisterRequest,
+    admin_user: dict[str, Any] = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Create a new user with the specified role (admin only)."""
+    try:
+        user = await auth_service.register_user(
+            db=db,
+            username=body.username,
+            email=body.email,
+            password=body.password,
+            role=body.role,
+        )
+    except auth_service.AuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return user
 
 
 @router.get(

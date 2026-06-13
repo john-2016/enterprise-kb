@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import settings
+from backend.config import settings, validate_security_settings
 from backend.database import Base, get_engine, init_db
 from backend.models import User, Document, KnowledgeBase, DocumentKB, AuditLog
 from backend.routers import auth, documents, chat, admin
@@ -28,6 +28,9 @@ vector_store: VectorStore | None = None
 async def lifespan(app: FastAPI):
     """Application lifecycle — init DB, embedding, vector store."""
     global embedding_service, vector_store
+
+    # 0. Security validation (C1)
+    validate_security_settings()
 
     # 1. Database
     await init_db(settings.DATABASE_URL)
@@ -58,13 +61,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS — 白名单（来自 CORS_ALLOWED_ORIGINS），禁用 *+credentials
+_origins = [o.strip() for o in settings.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_origins,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 

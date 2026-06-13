@@ -1,7 +1,8 @@
 """Authentication and user management service.
 
-Uses passlib with bcrypt for password hashing. All database operations
-are async-compatible (accept an async db session).
+Uses bcrypt directly (no passlib) to avoid passlib 1.7.4 + bcrypt 5.x
+``__about__`` AttributeError. All database operations are async-compatible
+(accept an async db session).
 """
 
 from __future__ import annotations
@@ -10,22 +11,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from passlib.context import CryptContext
 from sqlalchemy import text
 
-# ---------------------------------------------------------------------------
-# Password hashing
-# ---------------------------------------------------------------------------
-
-_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def _hash_password(password: str) -> str:
-    return _pwd_ctx.hash(password)
-
-
-def _verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_ctx.verify(plain, hashed)
+# Re-use the project's hash/verify functions (single source of truth)
+from backend.core.security import hash_password as _hash_password
+from backend.core.security import verify_password as _verify_password
 
 
 # ---------------------------------------------------------------------------

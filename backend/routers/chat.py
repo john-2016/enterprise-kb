@@ -7,6 +7,7 @@ All routes require authentication and are prefixed with ``/api/v1/chat``.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -20,6 +21,8 @@ from backend.services.embedding_service import MiniMaxEmbedding, VectorStore
 from backend.services.rag_service import RAGService
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -112,11 +115,12 @@ async def query_knowledge_base(
 
     try:
         query_vector = await embedder.embed_text(body.question)
-    except RuntimeError as exc:
+    except RuntimeError:
+        logger.exception("Embedding service error")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Embedding service error: {exc}",
-        ) from exc
+            detail="Upstream embedding service temporarily unavailable",
+        )
 
     results = store.search(query_vector, top_k=body.top_k)
 
@@ -135,11 +139,12 @@ async def query_knowledge_base(
 
     try:
         answer = await rag.query(body.question, top_k=body.top_k)
-    except Exception as exc:
+    except Exception:
+        logger.exception("RAG query failed")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"RAG query failed: {exc}",
-        ) from exc
+            detail="Upstream RAG service temporarily unavailable",
+        )
 
     tokens_used = _estimate_tokens(body.question) + _estimate_tokens(answer)
 
@@ -162,6 +167,7 @@ async def query_knowledge_base(
         await db.commit()
     except Exception:
         await db.rollback()
+        logger.exception("Audit log write failed")
 
     return {
         "answer": answer,
