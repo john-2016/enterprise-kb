@@ -9,6 +9,7 @@ from backend.models.user import User
 from backend.models.document import Document
 from backend.models.kb import KnowledgeBase, DocumentKB
 from backend.models.audit import AuditLog
+from backend.models.provider import ModelProvider
 
 __all__ = [
     "Base",
@@ -17,4 +18,5 @@ __all__ = [
     "KnowledgeBase",
     "DocumentKB",
     "AuditLog",
+    "ModelProvider",
 ]
