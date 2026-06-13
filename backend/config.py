@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # MiniMax API
     MINIMAX_API_KEY: str = ""
+    MINIMAX_CN_API_KEY: str = ""  # 兼容两种变量名
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/kb.db"
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    DATA_DIR: str = str(Path(__file__).resolve().parent.parent / "data")
+    UPLOAD_MAX_SIZE: int = 50 * 1024 * 1024  # 50MB
 
     # Vector store
     VECTOR_DIMENSION: int = 1536

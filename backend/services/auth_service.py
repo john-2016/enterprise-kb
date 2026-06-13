@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from passlib.context import CryptContext
+from sqlalchemy import text
 
 # ---------------------------------------------------------------------------
 # Password hashing
@@ -50,14 +51,13 @@ def _make_user(
     role: str = "editor",
 ) -> dict:
     return {
-        "id": str(uuid.uuid4()),
         "username": username,
         "email": email,
         "hashed_password": _hash_password(password),
         "role": role,
         "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     }
 
 
@@ -93,9 +93,9 @@ async def register_user(
     AuthError
         If the username or email already exists.
     """
-    # Simulate a uniqueness check — replace with real query in production
+    # Simulate a uniqueness check
     existing = await db.execute(
-        "SELECT id FROM users WHERE username = :u OR email = :e",
+        text("SELECT id FROM users WHERE username = :u OR email = :e"),
         {"u": username, "e": email},
     )
     if existing is not None and existing.scalar_one_or_none() is not None:
@@ -103,15 +103,19 @@ async def register_user(
 
     user = _make_user(username, email, password, role)
 
-    # Persist — adapt to your ORM (e.g. ``db.add(User(**user))``)
-    await db.execute(
-        "INSERT INTO users (id, username, email, hashed_password, role, "
-        "is_active, created_at, updated_at) "
-        "VALUES (:id, :username, :email, :hashed_password, :role, "
-        ":is_active, :created_at, :updated_at)",
+    result = await db.execute(
+        text("INSERT INTO users (username, email, hashed_password, role, "
+             "is_active, created_at, updated_at) "
+             "VALUES (:username, :email, :hashed_password, :role, "
+             ":is_active, :created_at, :updated_at) RETURNING *"),
         user,
     )
     await db.commit()
+
+    # Fetch the auto-generated id from RETURNING
+    row = result.mappings().first()
+    if row:
+        user["id"] = row["id"]
 
     # Return record without the password hash
     return {k: v for k, v in user.items() if k != "hashed_password"}
@@ -135,7 +139,7 @@ async def authenticate_user(
         If credentials are invalid or the user is inactive.
     """
     result = await db.execute(
-        "SELECT * FROM users WHERE username = :u",
+        text("SELECT * FROM users WHERE username = :u"),
         {"u": username},
     )
     user = result.mappings().first()
@@ -153,17 +157,17 @@ async def authenticate_user(
 
 async def get_user_by_id(
     db,
-    user_id: str,
+    user_id: int,
 ) -> dict:
-    """Retrieve a user by their UUID.
+    """Retrieve a user by their primary key.
 
     Raises
     ------
     UserNotFoundError
     """
     result = await db.execute(
-        "SELECT * FROM users WHERE id = :uid",
-        {"uid": user_id},
+        text("SELECT * FROM users WHERE id = :uid"),
+        {"uid": int(user_id)},
     )
     user = result.mappings().first()
     if user is None:
@@ -184,8 +188,8 @@ async def list_users(
         User records (password hashes excluded).
     """
     result = await db.execute(
-        "SELECT * FROM users ORDER BY created_at DESC "
-        "OFFSET :skip LIMIT :limit",
+        text("SELECT * FROM users ORDER BY created_at DESC "
+             "OFFSET :skip LIMIT :limit"),
         {"skip": skip, "limit": limit},
     )
     rows = result.mappings().all()
@@ -194,7 +198,7 @@ async def list_users(
 
 async def update_user_role(
     db,
-    user_id: str,
+    user_id: int,
     new_role: str,
 ) -> dict:
     """Update a user's role.
@@ -213,10 +217,9 @@ async def update_user_role(
         raise ValueError(f"Invalid role '{new_role}'. Must be one of {valid_roles}")
 
     result = await db.execute(
-        "UPDATE users SET role = :role, updated_at = :now "
-        "WHERE id = :uid "
-        "RETURNING *",
-        {"role": new_role, "now": datetime.now(timezone.utc).isoformat(), "uid": user_id},
+        text("UPDATE users SET role = :role, updated_at = :now "
+             "WHERE id = :uid RETURNING *"),
+        {"role": new_role, "now": datetime.now(timezone.utc), "uid": int(user_id)},
     )
     updated = result.mappings().first()
     if updated is None:

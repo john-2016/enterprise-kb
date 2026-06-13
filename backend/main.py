@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings
-from backend.database import Base, engine, init_db
+from backend.database import Base, get_engine, init_db
 from backend.models import User, Document, KnowledgeBase, DocumentKB, AuditLog
 from backend.routers import auth, documents, chat, admin
 from backend.services.embedding_service import MiniMaxEmbedding, VectorStore
@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
 
     # 1. Database
     await init_db(settings.DATABASE_URL)
+    engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -38,17 +39,16 @@ async def lifespan(app: FastAPI):
     embedding_service = MiniMaxEmbedding()
 
     # 3. Vector store
-    vs_path = VECTOR_DIR / "index.faiss"
-    meta_path = VECTOR_DIR / "metadata.pkl"
+    vs_base = VECTOR_DIR / "vs"
     vector_store = VectorStore(dimension=settings.VECTOR_DIMENSION)
-    if vs_path.exists() and meta_path.exists():
-        vector_store.load(str(vs_path), str(meta_path))
+    if (VECTOR_DIR / "vs.index").exists():
+        vector_store.load(str(vs_base))
 
     yield
 
     # Shutdown — persist vector store
     if vector_store is not None:
-        vector_store.save(str(vs_path), str(meta_path))
+        vector_store.save(str(vs_base))
 
 
 app = FastAPI(
@@ -58,7 +58,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow frontend dev server
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,18 +67,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes
+
+# Health check (BEFORE static mount so API routes take precedence)
+@app.get("/api/v1/health")
+async def health():
+    return {"status": "ok", "version": "1.0.0", "service": "enterprise-kb"}
+
+
+# API Routes
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 
-# Static files (frontend SPA)
+# Frontend SPA — catch-all mount AFTER API routes
 static_dir = Path(__file__).resolve().parent.parent / "frontend"
 if static_dir.exists():
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="frontend")
-
-
-@app.get("/api/v1/health")
-async def health():
-    return {"status": "ok", "version": "1.0.0", "service": "enterprise-kb"}

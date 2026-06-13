@@ -25,15 +25,14 @@ from .embedding_service import (
 # ---------------------------------------------------------------------------
 
 _DEFAULT_SYSTEM_PROMPT = (
-    "You are an enterprise knowledge assistant. Answer the user's question "
-    "based **only** on the context provided below. If the context does not "
-    "contain enough information to answer, say so clearly — do not make up "
-    "information. Cite relevant source documents where possible.\n\n"
-    "Context:\n{context}"
+    "你是一个企业知识库助手。请**仅基于**下面提供的上下文内容回答用户问题。"
+    "如果上下文信息不足，请明确说明——不要编造信息。"
+    "尽可能引用相关文档来源。\n\n"
+    "上下文：\n{context}"
 )
 
 _DEFAULT_RAG_PROMPT = (
-    "Using the context above, answer the following question:\n\n{question}"
+    "基于以上上下文，回答以下问题：\n\n{question}"
 )
 
 # ---------------------------------------------------------------------------
@@ -155,7 +154,7 @@ class RAGService:
 
         Reads ``MINIMAX_API_KEY`` from the environment.
         """
-        api_key = os.environ.get("MINIMAX_API_KEY")
+        api_key = os.environ.get("MINIMAX_API_KEY") or os.environ.get("MINIMAX_CN_API_KEY")
         if not api_key:
             raise RAGError(
                 "MINIMAX_API_KEY environment variable is not set. "
@@ -190,18 +189,15 @@ class RAGService:
             resp.raise_for_status()
             data = resp.json()
 
-            # MiniMax chat response structure:
-            # data["choices"][0]["messages"][0]["content"]
+            # MiniMax M3 OpenAI-compatible response:
+            # data["choices"][0]["message"]["content"]
             choices = data.get("choices", [])
             if not choices:
-                raise RAGError("MiniMax API returned no choices")
+                raise RAGError("MiniMax API 返回内容为空")
 
-            # The assistant content is in the last message of the first choice
-            messages = choices[0].get("messages", [])
-            if not messages:
-                raise RAGError("MiniMax API returned no messages in choice")
-
-            content = messages[-1].get("content", "")
+            content = choices[0].get("message", {}).get("content", "")
+            if not content:
+                raise RAGError("MiniMax API 返回内容为空")
             return content
 
         except httpx.HTTPStatusError as exc:

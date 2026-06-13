@@ -17,6 +17,13 @@ engine = None
 AsyncSessionLocal = None
 
 
+def get_engine():
+    """Get the initialized engine. Raises if init_db() not called yet."""
+    if engine is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+    return engine
+
+
 async def init_db(database_url: str, **kwargs):
     """Initialise the async engine and session factory.
 

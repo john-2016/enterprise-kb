@@ -6,11 +6,12 @@ All routes require admin privileges and are prefixed with ``/api/v1/admin``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_admin_user, get_db
@@ -24,13 +25,13 @@ router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 # ---------------------------------------------------------------------------
 
 class UserAdminResponse(BaseModel):
-    id: int
+    id: int | str
     username: str
     email: str
     role: str
     is_active: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime | str
+    updated_at: datetime | str
 
 
 class UserListResponse(BaseModel):
@@ -87,11 +88,9 @@ async def list_all_users(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Return a paginated list of all registered users."""
-    # Count total
-    count_result = await db.execute("SELECT COUNT(*) FROM users")
+    count_result = await db.execute(text("SELECT COUNT(*) FROM users"))
     total = count_result.scalar() or 0
 
-    # Fetch users
     rows = await auth_service.list_users(db, skip=skip, limit=limit)
 
     return {
@@ -113,14 +112,10 @@ async def change_user_role(
     admin_user: dict[str, Any] = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Update the role of the specified user.
-
-    Allowed roles: ``admin``, ``editor``, ``viewer``.
-    """
     try:
         updated = await auth_service.update_user_role(
             db=db,
-            user_id=str(user_id),
+            user_id=int(user_id),
             new_role=body.role,
         )
     except auth_service.UserNotFoundError as exc:
@@ -140,6 +135,7 @@ async def change_user_role(
 @router.delete(
     "/users/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete a user (not yourself)",
 )
 async def delete_user(
@@ -147,31 +143,24 @@ async def delete_user(
     admin_user: dict[str, Any] = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Permanently delete a user account.
-
-    The requesting admin cannot delete their own account through this endpoint.
-    """
-    # Prevent self-deletion
-    current_user_id = admin_user.get("sub")
-    if str(current_user_id) == str(user_id):
+    current_user_id = int(admin_user.get("sub"))
+    if current_user_id == int(user_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete your own account. Use a different admin account.",
         )
 
-    # Verify user exists
     try:
-        await auth_service.get_user_by_id(db, str(user_id))
+        await auth_service.get_user_by_id(db, int(user_id))
     except auth_service.UserNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 
-    # Delete the user (cascade will remove documents, audit logs, etc.)
     await db.execute(
-        "DELETE FROM users WHERE id = :uid",
-        {"uid": user_id},
+        text("DELETE FROM users WHERE id = :uid"),
+        {"uid": int(user_id)},
     )
     await db.commit()
 
@@ -185,14 +174,13 @@ async def get_system_stats(
     admin_user: dict[str, Any] = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
-    """Return aggregate counts across the system."""
-    user_count = await db.execute("SELECT COUNT(*) FROM users")
-    doc_count = await db.execute("SELECT COUNT(*) FROM documents")
+    user_count = await db.execute(text("SELECT COUNT(*) FROM users"))
+    doc_count = await db.execute(text("SELECT COUNT(*) FROM documents"))
     chunk_count = await db.execute(
-        "SELECT COALESCE(SUM(chunk_count), 0) FROM documents"
+        text("SELECT COALESCE(SUM(chunk_count), 0) FROM documents")
     )
     query_count = await db.execute(
-        "SELECT COUNT(*) FROM audit_logs WHERE action = 'query'"
+        text("SELECT COUNT(*) FROM audit_logs WHERE action = 'query'")
     )
 
     return {
@@ -212,12 +200,11 @@ async def get_audit_logs(
     skip: int = Query(0, ge=0, description="Records to skip"),
     limit: int = Query(50, ge=1, le=500, description="Max records to return"),
     action: str | None = Query(
-        None, description="Filter by action type (upload, delete, query, login, admin_action)"
+        None, description="Filter by action type"
     ),
     admin_user: dict[str, Any] = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return paginated audit logs, optionally filtered by action type."""
     params: dict[str, Any] = {"skip": skip, "limit": limit}
 
     if action:
@@ -226,23 +213,21 @@ async def get_audit_logs(
     else:
         where_clause = "TRUE"
 
-    # Count total
     count_result = await db.execute(
-        f"SELECT COUNT(*) FROM audit_logs al WHERE {where_clause}",
+        text(f"SELECT COUNT(*) FROM audit_logs al WHERE {where_clause}"),
         params,
     )
     total = count_result.scalar() or 0
 
-    # Fetch paginated audit logs with username join
     result = await db.execute(
-        f"""
+        text(f"""
         SELECT al.*, u.username
         FROM audit_logs al
         LEFT JOIN users u ON u.id = al.user_id
         WHERE {where_clause}
         ORDER BY al.created_at DESC
         OFFSET :skip LIMIT :limit
-        """,
+        """),
         params,
     )
     rows = result.mappings().all()

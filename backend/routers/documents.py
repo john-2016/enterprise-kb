@@ -7,11 +7,13 @@ All routes require authentication and are prefixed with ``/api/v1/documents``.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_current_user, get_db
@@ -30,7 +32,6 @@ from backend.config import settings
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
-# Upload directory — configurable via env or default
 UPLOAD_DIR = os.environ.get("DOCUMENT_UPLOAD_DIR", "./data/uploads/")
 
 
@@ -80,7 +81,7 @@ class UploadResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helper — inject/store vector store & embedding service (singleton-style)
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _get_embedder() -> MiniMaxEmbedding:
@@ -110,12 +111,6 @@ async def upload_document(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Upload a supported document file, extract its text content, and chunk it.
-
-    Supported file types: ``.md``, ``.txt``, ``.pdf``, ``.docx``.
-    The document record is persisted to the database immediately.
-    """
-    # 1. Save the uploaded file to disk
     try:
         file_path = await save_upload_file(file, UPLOAD_DIR)
     except UnsupportedFileTypeError as exc:
@@ -129,30 +124,24 @@ async def upload_document(
     file_type = ext if ext else "txt"
     doc_title = title or Path(original_filename).stem
 
-    # 2. Extract text
     try:
         content_text = extract_text_from_file(file_path, file_type)
     except UnsupportedFileTypeError as exc:
-        # Clean up saved file
         Path(file_path).unlink(missing_ok=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
 
-    # 3. Chunk the extracted text
     chunks = chunk_text(content_text)
     chunk_count = len(chunks)
 
-    # 4. Insert document record
     owner_id = current_user.get("sub")
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     file_size = Path(file_path).stat().st_size
 
     result = await db.execute(
-        """
+        text("""
         INSERT INTO documents
             (title, filename, file_path, file_size, file_type,
              category, tags, content_text, chunk_count, is_indexed,
@@ -162,7 +151,7 @@ async def upload_document(
              :category, :tags, :content_text, :chunk_count, FALSE,
              :owner_id, :created_at, :updated_at)
         RETURNING *
-        """,
+        """),
         {
             "title": doc_title,
             "filename": original_filename,
@@ -198,11 +187,6 @@ async def index_document(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Embed all chunks of a document and store them in the vector index.
-
-    Requires that the document exists and has not already been indexed.
-    """
-    # 1. Fetch document
     try:
         doc = await get_document(db, str(doc_id))
     except DocumentNotFoundError as exc:
@@ -224,10 +208,8 @@ async def index_document(
             detail="Document has no extracted text content to index",
         )
 
-    # 2. Re-chunk (in case chunk_count wasn't set)
     chunks = chunk_text(content_text)
 
-    # 3. Embed all chunks
     embedder = _get_embedder()
     try:
         vectors = await embedder.embed_batch(chunks)
@@ -237,7 +219,6 @@ async def index_document(
             detail=f"Embedding service error: {exc}",
         ) from exc
 
-    # 4. Build metadata and store in vector index
     store = _get_vector_store()
     chunk_ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
     metadata_list = [
@@ -253,13 +234,12 @@ async def index_document(
 
     store.add_vectors(chunk_ids, vectors, metadata_list)
 
-    # 5. Mark document as indexed
     await db.execute(
-        "UPDATE documents SET is_indexed = TRUE, chunk_count = :cc, "
-        "updated_at = :now WHERE id = :did",
+        text("UPDATE documents SET is_indexed = TRUE, chunk_count = :cc, "
+             "updated_at = :now WHERE id = :did"),
         {
             "cc": len(chunks),
-            "now": "datetime('now')",
+            "now": datetime.now(timezone.utc),
             "did": doc_id,
         },
     )
@@ -287,8 +267,6 @@ async def list_docs(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return a paginated list of documents, optionally filtered by category or owner."""
-    # Build filter conditions
     filters: list[str] = []
     params: dict[str, Any] = {"skip": skip, "limit": limit}
 
@@ -301,17 +279,15 @@ async def list_docs(
 
     where_clause = " AND ".join(filters) if filters else "TRUE"
 
-    # Count total matching documents
     count_result = await db.execute(
-        f"SELECT COUNT(*) FROM documents WHERE {where_clause}",
+        text(f"SELECT COUNT(*) FROM documents WHERE {where_clause}"),
         params,
     )
     total = count_result.scalar() or 0
 
-    # Fetch paginated results
     result = await db.execute(
-        f"SELECT * FROM documents WHERE {where_clause} "
-        "ORDER BY created_at DESC OFFSET :skip LIMIT :limit",
+        text(f"SELECT * FROM documents WHERE {where_clause} "
+             "ORDER BY created_at DESC OFFSET :skip LIMIT :limit"),
         params,
     )
     rows = result.mappings().all()
@@ -334,7 +310,6 @@ async def get_doc(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return full details for a single document by its ID."""
     try:
         doc = await get_document(db, str(doc_id))
     except DocumentNotFoundError as exc:
@@ -349,6 +324,7 @@ async def get_doc(
 @router.delete(
     "/{doc_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Delete a document",
 )
 async def delete_doc(
@@ -356,7 +332,6 @@ async def delete_doc(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a document record and its associated physical file."""
     try:
         await delete_document(db, str(doc_id))
     except DocumentNotFoundError as exc:
@@ -376,12 +351,6 @@ async def reindex_document(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Re-extract text from the original file, re-chunk, and re-index.
-
-    This is useful when the document content has changed on disk or when
-    upgrading the chunking/embedding strategy.
-    """
-    # 1. Fetch existing document
     try:
         doc = await get_document(db, str(doc_id))
     except DocumentNotFoundError as exc:
@@ -399,7 +368,6 @@ async def reindex_document(
             detail="Original file no longer exists on disk",
         )
 
-    # 2. Re-extract text
     try:
         content_text = extract_text_from_file(file_path, file_type)
     except (UnsupportedFileTypeError, ImportError) as exc:
@@ -408,28 +376,24 @@ async def reindex_document(
             detail=str(exc),
         ) from exc
 
-    # 3. Re-chunk
     chunks = chunk_text(content_text)
 
-    # 4. Update document record with new text and chunk count, reset index flag
     await db.execute(
-        "UPDATE documents SET content_text = :ct, chunk_count = :cc, "
-        "is_indexed = FALSE, updated_at = :now WHERE id = :did",
+        text("UPDATE documents SET content_text = :ct, chunk_count = :cc, "
+             "is_indexed = FALSE, updated_at = :now WHERE id = :did"),
         {
             "ct": content_text,
             "cc": len(chunks),
-            "now": "datetime('now')",
+            "now": datetime.now(timezone.utc),
             "did": doc_id,
         },
     )
 
-    # 5. Re-embed and re-index
     embedder = _get_embedder()
     try:
         vectors = await embedder.embed_batch(chunks)
     except RuntimeError as exc:
-        # Don't fail the whole request — text is updated even if indexing fails
-        await db.commit()
+        # Don't commit partial state — text update and index must be atomic
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Re-extraction succeeded but embedding failed: {exc}",
@@ -450,10 +414,9 @@ async def reindex_document(
 
     store.add_vectors(chunk_ids, vectors, metadata_list)
 
-    # Mark indexed
     await db.execute(
-        "UPDATE documents SET is_indexed = TRUE, updated_at = :now WHERE id = :did",
-        {"now": "datetime('now')", "did": doc_id},
+        text("UPDATE documents SET is_indexed = TRUE, updated_at = :now WHERE id = :did"),
+        {"now": datetime.now(timezone.utc), "did": doc_id},
     )
     await db.commit()
 

@@ -37,10 +37,10 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 DEFAULT_EMBO_MODEL = "embo-01"
-DEFAULT_CHAT_MODEL = "M3"  # used by RAG service
-MINIMAX_BASE_URL = "https://api.minimax.chat/v1"
-MINIMAX_EMBED_URL = f"{MINIMAX_BASE_URL}/embeddings"
-MINIMAX_CHAT_URL = f"{MINIMAX_BASE_URL}/text/chatcompletion_v2"
+DEFAULT_CHAT_MODEL = "MiniMax-M3"  # used by RAG service
+MINIMAX_BASE_URL = "https://api.minimaxi.com"
+MINIMAX_EMBED_URL = f"{MINIMAX_BASE_URL}/v1/embeddings"
+MINIMAX_CHAT_URL = f"{MINIMAX_BASE_URL}/v1/chat/completions"
 
 
 # ===================================================================
@@ -55,7 +55,9 @@ class MiniMaxEmbedding:
     """
 
     def __init__(self) -> None:
-        self.api_key: str | None = os.environ.get("MINIMAX_API_KEY")
+        self.api_key: str | None = (
+            os.environ.get("MINIMAX_API_KEY") or os.environ.get("MINIMAX_CN_API_KEY")
+        )
         self.model: str = DEFAULT_EMBO_MODEL
         self._client: httpx.AsyncClient | None = None
 
@@ -97,7 +99,8 @@ class MiniMaxEmbedding:
 
         payload = {
             "model": self.model,
-            "input": text,
+            "texts": [text],
+            "type": "db"
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -108,9 +111,11 @@ class MiniMaxEmbedding:
         resp.raise_for_status()
         data = resp.json()
 
-        # MiniMax returns: data[0]["embedding"] as a list of floats
-        embedding: list[float] = data["data"][0]["embedding"]
-        return embedding
+        # MiniMax CN returns: {"vectors": [[...]], "total_tokens": N}
+        vectors = data.get("vectors", [])
+        if vectors:
+            return vectors[0]
+        raise ValueError(f"Unexpected MiniMax embedding response: {data}")
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts in a single API call.
@@ -133,7 +138,8 @@ class MiniMaxEmbedding:
 
         payload = {
             "model": self.model,
-            "input": texts,
+            "texts": texts,
+            "type": "db"
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -144,10 +150,11 @@ class MiniMaxEmbedding:
         resp.raise_for_status()
         data = resp.json()
 
-        # MiniMax batch response: data is an array of {"embedding": [...]}
-        # The API returns them in-order.
-        embeddings: list[list[float]] = [item["embedding"] for item in data["data"]]
-        return embeddings
+        # MiniMax CN returns: {"vectors": [[...], [...], ...], "total_tokens": N}
+        vectors = data.get("vectors", [])
+        if vectors:
+            return vectors
+        raise ValueError(f"Unexpected MiniMax batch embedding response: {data}")
 
 
 # ===================================================================

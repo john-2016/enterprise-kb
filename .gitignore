@@ -18,9 +18,18 @@ venv/
 data/uploads/*
 data/vector_store/*
 data/logs/*
+data/*.db
+data/*.sqlite
+data/*.sqlite3
 !data/uploads/.gitkeep
 !data/vector_store/.gitkeep
 !data/logs/.gitkeep
+
+# Test artifacts
+test_api.py
+test_api.sh
+.pytest_cache/
+*.log
 
 # Docker
 .docker/

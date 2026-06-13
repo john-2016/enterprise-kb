@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.security import decode_access_token
-from backend.database import AsyncSessionLocal as async_session_factory
+from backend import database
 
 # Bearer-token scheme used by the OpenAPI docs UI
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -26,7 +26,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
     The session is committed on success or rolled back on exception.
     """
-    async with async_session_factory() as session:
+    async with database.AsyncSessionLocal() as session:
         try:
             yield session
             await session.commit()

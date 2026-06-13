@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
@@ -69,7 +70,6 @@ _rag_service: RAGService | None = None
 
 
 def _get_services() -> tuple[MiniMaxEmbedding, VectorStore, RAGService]:
-    """Return (or create) shared embedding, vector-store, and RAG instances."""
     global _embedder, _vector_store, _rag_service
 
     if _embedder is None:
@@ -89,9 +89,8 @@ def _get_services() -> tuple[MiniMaxEmbedding, VectorStore, RAGService]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _estimate_tokens(text: str) -> int:
-    """Rough token estimate (4 chars ≈ 1 token)."""
-    return max(1, len(text) // 4)
+def _estimate_tokens(text_: str) -> int:
+    return max(1, len(text_) // 4)
 
 
 # ---------------------------------------------------------------------------
@@ -109,14 +108,8 @@ async def query_knowledge_base(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Run a RAG query: embed the question, retrieve relevant chunks from
-    the vector store, build context, and generate an answer via the LLM.
-
-    Returns the answer text, source document metadata, and a token estimate.
-    """
     embedder, store, rag = _get_services()
 
-    # 1. Embed the question
     try:
         query_vector = await embedder.embed_text(body.question)
     except RuntimeError as exc:
@@ -125,24 +118,21 @@ async def query_knowledge_base(
             detail=f"Embedding service error: {exc}",
         ) from exc
 
-    # 2. Search vector store for relevant chunks
     results = store.search(query_vector, top_k=body.top_k)
 
-    # 3. Build source metadata from search results
     sources: list[dict[str, Any]] = []
     for doc_id, score, meta in results:
-        chunk_text = meta.get("text", meta.get("content", ""))
+        chunk_text_ = meta.get("text", meta.get("content", ""))
         sources.append(
             SourceItem(
                 doc_id=str(doc_id),
                 title=meta.get("title", meta.get("filename", str(doc_id))),
                 chunk_index=meta.get("chunk_index", 0),
                 score=float(score),
-                snippet=chunk_text[:300],  # trim for transport
+                snippet=chunk_text_[:300],
             )
         )
 
-    # 4. Generate answer via RAG pipeline
     try:
         answer = await rag.query(body.question, top_k=body.top_k)
     except Exception as exc:
@@ -151,29 +141,26 @@ async def query_knowledge_base(
             detail=f"RAG query failed: {exc}",
         ) from exc
 
-    # 5. Token estimate
     tokens_used = _estimate_tokens(body.question) + _estimate_tokens(answer)
 
-    # 6. Log the query to the audit trail (asynchronously — don't block response)
-    user_id = current_user.get("sub")
+    user_id = int(current_user.get("sub"))
     try:
         await db.execute(
-            """
+            text("""
             INSERT INTO audit_logs
                 (user_id, action, target_type, target_id, details, ip_address, created_at)
             VALUES
                 (:uid, 'query', 'knowledge_base', :kb_id, :details, NULL, :now)
-            """,
+            """),
             {
                 "uid": user_id,
                 "kb_id": body.kb_id,
                 "details": f"question={body.question[:200]!r}, top_k={body.top_k}",
-                "now": datetime.now(timezone.utc).isoformat(),
+                "now": datetime.now(timezone.utc),
             },
         )
         await db.commit()
     except Exception:
-        # Non-critical — log and continue
         await db.rollback()
 
     return {
@@ -194,25 +181,19 @@ async def query_history(
     current_user: dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return paginated query history for the current user.
+    user_id = int(current_user.get("sub"))
 
-    Reads from the ``audit_logs`` table filtered to ``action = 'query'``.
-    """
-    user_id = current_user.get("sub")
-
-    # Count total queries
     count_result = await db.execute(
-        "SELECT COUNT(*) FROM audit_logs "
-        "WHERE user_id = :uid AND action = 'query'",
+        text("SELECT COUNT(*) FROM audit_logs "
+             "WHERE user_id = :uid AND action = 'query'"),
         {"uid": user_id},
     )
     total = count_result.scalar() or 0
 
-    # Fetch paginated results
     result = await db.execute(
-        "SELECT * FROM audit_logs "
-        "WHERE user_id = :uid AND action = 'query' "
-        "ORDER BY created_at DESC OFFSET :skip LIMIT :limit",
+        text("SELECT * FROM audit_logs "
+             "WHERE user_id = :uid AND action = 'query' "
+             "ORDER BY created_at DESC OFFSET :skip LIMIT :limit"),
         {"uid": user_id, "skip": skip, "limit": limit},
     )
     rows = result.mappings().all()
@@ -220,13 +201,10 @@ async def query_history(
     items: list[dict[str, Any]] = []
     for row in rows:
         details = row.get("details") or ""
-        # Parse question from details
         question = details
         if "question=" in details:
-            # Extract question from logged detail string
             try:
                 question = details.split("question=", 1)[1].split(", top_k=")[0]
-                # Remove surrounding quotes if present
                 question = question.strip("'\"")
             except (IndexError, ValueError):
                 question = details

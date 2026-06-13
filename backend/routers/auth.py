@@ -6,14 +6,16 @@ All routes are prefixed with ``/api/v1/auth``.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_current_user, get_db
-from backend.core.security import create_access_token, hash_password
+from backend.core.security import create_access_token, hash_password, verify_password
 from backend.services import auth_service
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -41,13 +43,13 @@ class ChangePasswordRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: int | str
     username: str
     email: str
     role: str
     is_active: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime | str
+    updated_at: datetime | str
 
 
 class TokenResponse(BaseModel):
@@ -153,6 +155,7 @@ async def get_me(
 @router.put(
     "/me/password",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Change current user's password",
 )
 async def change_password(
@@ -166,10 +169,9 @@ async def change_password(
     """
     user_id = current_user.get("sub")
 
-    # Fetch the user with the hashed password
     result = await db.execute(
-        "SELECT * FROM users WHERE id = :uid",
-        {"uid": user_id},
+        text("SELECT * FROM users WHERE id = :uid"),
+        {"uid": int(user_id)},
     )
     user_row = result.mappings().first()
     if user_row is None:
@@ -178,23 +180,19 @@ async def change_password(
             detail="User not found",
         )
 
-    # Verify current password using the service's internal verifier
-    from backend.core.security import verify_password
-
     if not verify_password(body.current_password, user_row["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
         )
 
-    # Update the password
     new_hashed = hash_password(body.new_password)
     await db.execute(
-        "UPDATE users SET hashed_password = :hp, updated_at = :now WHERE id = :uid",
+        text("UPDATE users SET hashed_password = :hp, updated_at = :now WHERE id = :uid"),
         {
             "hp": new_hashed,
-            "now": "datetime('now')",
-            "uid": user_id,
+            "now": datetime.now(timezone.utc),
+            "uid": int(user_id),
         },
     )
     await db.commit()
