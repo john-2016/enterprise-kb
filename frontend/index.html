@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业知识库</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Auth Page -->
+  <div id="auth-page" class="auth-page" style="display:flex">
+    <div class="auth-card" id="page-login">
+      <h1>🔐 企业知识库</h1>
+      <p>登录以继续</p>
+      <div id="auth-alert" class="alert" style="display:none"></div>
+      <form onsubmit="login(event)">
+        <div class="form-group">
+          <label>用户名</label>
+          <input name="username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" name="password" required autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary btn-block">登录</button>
+        <p class="text-center mt-4">还没有账号？<span class="link" onclick="showPage('register')">注册</span></p>
+      </form>
+    </div>
+
+    <div class="auth-card" id="page-register" style="display:none">
+      <h1>📝 注册账号</h1>
+      <p>创建企业知识库账号</p>
+      <div id="reg-alert" class="alert" style="display:none"></div>
+      <form onsubmit="register(event)">
+        <div class="form-group">
+          <label>用户名</label>
+          <input name="username" required>
+        </div>
+        <div class="form-group">
+          <label>邮箱</label>
+          <input type="email" name="email" required>
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" name="password" required minlength="6">
+        </div>
+        <button class="btn btn-primary btn-block">注册</button>
+        <p class="text-center mt-4">已有账号？<span class="link" onclick="showPage('login')">登录</span></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div class="app">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>📚 企业知识库</h2>
+        <div class="user-info">加载中...</div>
+      </div>
+      <nav class="nav">
+        <div class="nav-item active" data-page="chat" onclick="showPage('chat')">
+          <span class="icon">💬</span> 智能问答
+        </div>
+        <div class="nav-item" data-page="docs" onclick="showPage('docs')">
+          <span class="icon">📄</span> 文档管理
+        </div>
+        <div class="nav-item" data-page="admin" onclick="showPage('admin')">
+          <span class="icon">⚙️</span> 系统管理
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="logout-btn" onclick="logout()">🚪 退出登录</div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+      <!-- Chat Page -->
+      <div class="page active" id="page-chat">
+        <div class="chat-container">
+          <div class="chat-header">
+            <h1>💬 知识库智能问答</h1>
+            <p>基于 MiniMax-M3 的 RAG 问答引擎 — 上传文档后即可提问</p>
+          </div>
+          <div class="chat-messages" id="chat-messages">
+            <div id="welcome" class="welcome">
+              <h2>👋 欢迎使用企业知识库</h2>
+              <p>上传文档后，即可像聊天一样查询知识库内容</p>
+              <div class="welcome-features">
+                <div class="welcome-feature">
+                  <div class="icon">📄</div>
+                  <h3>上传文档</h3>
+                  <p>支持 MD / PDF / TXT / DOCX</p>
+                </div>
+                <div class="welcome-feature">
+                  <div class="icon">🧠</div>
+                  <h3>智能索引</h3>
+                  <p>MiniMax embo-01 自动向量化</p>
+                </div>
+                <div class="welcome-feature">
+                  <div class="icon">💬</div>
+                  <h3>RAG 问答</h3>
+                  <p>MiniMax-M3 精准回答</p>
+                </div>
+              </div>
+            </div>
+            <div id="typing-indicator" class="typing-indicator" style="display:none">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="chat-input">
+            <form onsubmit="sendMessage(event)">
+              <textarea id="chat-input" placeholder="输入你的问题..." rows="1" style="height:44px"></textarea>
+              <button class="btn btn-primary" type="submit">发送</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Documents Page -->
+      <div class="page" id="page-docs">
+        <div class="documents-header">
+          <h1>📄 文档管理</h1>
+          <button class="btn btn-primary" onclick="showUploadModal()">+ 上传文档</button>
+        </div>
+        <div class="documents-content">
+          <div id="docs-empty" class="empty-state">
+            <div class="icon">📂</div>
+            <h3>暂无文档</h3>
+            <p>上传你的第一篇文档，开始构建知识库</p>
+          </div>
+          <div class="doc-grid" id="doc-grid"></div>
+        </div>
+      </div>
+
+      <!-- Admin Page -->
+      <div class="page" id="page-admin">
+        <div class="admin-header">
+          <h1>⚙️ 系统管理</h1>
+        </div>
+        <div class="admin-content">
+          <div class="stats-grid" id="stats-grid"></div>
+          <h2 style="font-size:16px;margin-bottom:16px">👥 用户管理</h2>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>用户名</th><th>邮箱</th><th>角色</th><th>状态</th><th>组织</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <h2 id="modal-title">上传文档</h2>
+      <form id="upload-form" onsubmit="uploadDoc(event)">
+        <div class="dropzone" onclick="document.getElementById('file-input').click()">
+          <div class="icon">📁</div>
+          <p>拖拽文件到此处或点击上传</p>
+          <p class="hint">支持 MD / PDF / TXT / DOCX</p>
+        </div>
+        <input type="file" id="file-input" accept=".md,.pdf,.txt,.docx" onchange="onFileSelect(event)" style="display:none" multiple>
+        <div id="file-info" class="file-info" style="display:none"></div>
+        <div class="form-group">
+          <label>文档标题（可选）</label>
+          <input id="doc-title" placeholder="留空则使用文件名">
+        </div>
+        <div id="upload-progress" class="progress-bar" style="display:none">
+          <div class="fill"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn btn-primary btn-block" type="submit">上传并索引</button>
+          <button class="btn btn-block" type="button" onclick="closeModal()" style="background:var(--gray-100)">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Env
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Data
+data/uploads/*
+data/vector_store/*
+data/logs/*
+!data/uploads/.gitkeep
+!data/vector_store/.gitkeep
+!data/logs/.gitkeep
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
