@@ -11,6 +11,7 @@ from backend.config import settings, validate_security_settings
 from backend.database import Base, get_engine, init_db
 from backend.models import User, Document, KnowledgeBase, DocumentKB, AuditLog
 from backend.routers import auth, documents, chat, admin
+from backend.routers import admin_providers, admin_models, admin_ab_rules
 from backend.services.embedding_service import MiniMaxEmbedding, VectorStore
 
 DATA_DIR = Path(settings.DATA_DIR)
@@ -83,6 +84,11 @@ app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
+app.include_router(admin_providers.router)
+if admin_models.router is not None:
+    app.include_router(admin_models.router)
+if admin_ab_rules.router is not None:
+    app.include_router(admin_ab_rules.router)
 
 # Frontend SPA — catch-all mount AFTER API routes
 static_dir = Path(__file__).resolve().parent.parent / "frontend"
