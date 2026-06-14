@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings, validate_security_settings
-from backend.database import Base, get_engine, init_db, AsyncSessionLocal
+from backend.database import Base, get_engine, init_db
+from backend import database as _database  # Phase 7 fix: use module reference (init_db rebinds module global; top-level import of AsyncSessionLocal captured None at import time)
 from backend.models import User, Document, KnowledgeBase, DocumentKB, AuditLog
 from backend.routers import auth, documents, chat, admin
 from backend.routers import admin_providers, admin_models, admin_ab_rules
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI):
         from scripts.migrate_v1_to_v2 import migrate  # type: ignore  # noqa: E402
 
     try:
-        async with AsyncSessionLocal() as _s:
+        async with _database.AsyncSessionLocal() as _s:
             await migrate(_s)
     except Exception as _exc:  # pragma: no cover — boot must not break
         import logging as _logging
