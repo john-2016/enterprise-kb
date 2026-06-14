@@ -26,7 +26,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database import Base
 
@@ -72,6 +72,11 @@ class ModelConfig(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # 反向：provider → model
+    provider: Mapped["ModelProvider"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "ModelProvider", back_populates="models", lazy="select"
     )
 
     def __repr__(self) -> str:

@@ -35,5 +35,10 @@ class ModelProvider(Base):
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    # 反向：models -> 1 个 provider 有多个 model_config
+    models: Mapped[list["ModelConfig"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
+        "ModelConfig", back_populates="provider", cascade="all, delete-orphan"
+    )
+
     def __repr__(self) -> str:
         return f"<ModelProvider id={self.id} name={self.name!r} type={self.provider_type!r}>"
