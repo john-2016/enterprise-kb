@@ -28,6 +28,8 @@ cd enterprise-kb
 
 完成后访问 `http://localhost:8000`，用打印的密码登录。
 
+> 📘 **详细使用教程**（含终端用户 / 管理员 / API 三类读者、FAQ、smoke 验证过的安装踩坑清单）：[docs/TUTORIAL.md](docs/TUTORIAL.md)
+
 ### 后续添加 provider
 
 ```bash
