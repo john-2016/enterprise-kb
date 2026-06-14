@@ -56,27 +56,74 @@ DEFAULT_EMB_CONTEXT_WINDOW = 8192
 
 
 async def main() -> None:
-    """Legacy entry — bootstrap users for manual smoke testing."""
+    """Legacy entry — bootstrap users for manual smoke testing.
+
+    On a fresh install (no admin user), the admin password is generated
+    with ``secrets.token_urlsafe`` and written to ``data/.admin_password``
+    (chmod 600) so the operator can read it back. The path is printed to
+    stdout with a clear warning to change the password after first login.
+    """
     await database.init_db(settings.DATABASE_URL)
     engine = database.get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(database.Base.metadata.create_all)
 
     async with database.AsyncSessionLocal() as session:
-        admin = await register_user(
-            session, "admin", "admin@example.com", "admin123", role="admin"
-        )
-        print(f"✅ Admin user created: {admin['username']} / admin123")
+        # Detect first install
+        existing_admin = await _user_exists(session, "admin")
+        if existing_admin:
+            print("✓ Admin user already exists — leaving passwords unchanged.")
+        else:
+            import secrets as _secrets
+            admin_pwd = _secrets.token_urlsafe(16)
+            _write_admin_password_file(admin_pwd)
+            print("=" * 60)
+            print("✓ First-time install detected.")
+            print(f"  Admin user:  admin")
+            print(f"  Random pass: {admin_pwd}")
+            print(f"  (Saved to: data/.admin_password, chmod 600)")
+            print("  ⚠️  Log in and change this password immediately.")
+            print("=" * 60)
+            await register_user(
+                session, "admin", "admin@example.com", admin_pwd, role="admin"
+            )
 
+        # Editor / viewer: keep simple defaults for dev convenience
         editor = await register_user(
             session, "editor", "editor@example.com", "editor123", role="editor"
         )
-        print(f"✅ Editor user created: {editor['username']} / editor123")
+        if not existing_admin:
+            print(f"✓ Editor user created: {editor['username']} / editor123")
 
         viewer = await register_user(
             session, "viewer", "viewer@example.com", "viewer123", role="viewer"
         )
-        print(f"✅ Viewer user created: {viewer['username']} / viewer123")
+        if not existing_admin:
+            print(f"✓ Viewer user created: {viewer['username']} / viewer123")
+
+
+async def _user_exists(session: AsyncSession, username: str) -> bool:
+    """Return True if a user with the given username already exists."""
+    from backend.models import User
+    result = await session.execute(
+        select(User).where(User.username == username)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+def _write_admin_password_file(password: str) -> None:
+    """Persist the random admin password so install.sh can read it back.
+
+    File is chmod 600 (owner read/write only) and lives in ``data/`` which
+    is git-ignored. On a fresh checkout, ``install.sh`` reads this file and
+    prints the password to the operator.
+    """
+    import os
+    from pathlib import Path
+    pw_file = Path("data/.admin_password")
+    pw_file.parent.mkdir(parents=True, exist_ok=True)
+    pw_file.write_text(password + "\n")
+    os.chmod(pw_file, 0o600)
 
 
 def _resolve_minimax_api_key() -> Optional[str]:

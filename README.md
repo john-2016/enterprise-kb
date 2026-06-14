@@ -10,21 +10,50 @@
                                        MiniMax-M3 生成回答 ← 拼装 Prompt
 ```
 
+## ⚡ 5 分钟跑起来
+
+```bash
+git clone https://github.com/john-2016/enterprise-kb.git
+cd enterprise-kb
+./install.sh
+```
+
+`install.sh` 会自动：
+
+1. 生成 `.env`（含随机 `JWT_SECRET_KEY` 和 `ENCRYPTION_KEY`）
+2. 问你是否要添加自定义 LLM provider（可跳过，用内置 MiniMax）
+3. 启动 PostgreSQL + FastAPI 容器
+4. 等待服务健康检查通过
+5. 打印随机生成的 admin 密码
+
+完成后访问 `http://localhost:8000`，用打印的密码登录。
+
+### 后续添加 provider
+
+```bash
+./scripts/add-provider.sh
+# 交互式选择模板 (OpenAI / Anthropic / Gemini / DeepSeek / Qwen / GLM / Local)
+# 填 API key, 一行加完 provider + model
+```
+
 ## 🚀 快速启动
+
+> 想要自动 5 分钟跑起来？看上一节 [⚡ 5 分钟跑起来](#-5-分钟跑起来)。本节是手动部署详细步骤。
 
 ### 1. 配置环境变量
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入你的 MiniMax API Key
+# 编辑 .env，填入你的 MiniMax API Key (其他密钥 install.sh 会自动生成)
 ```
 
 ### 2. Docker 部署（推荐）
 
 ```bash
 docker compose up -d
-# 访问 http://localhost:8000
 ```
+
+服务跑在 `http://localhost:8000`。
 
 ### 3. 手动部署
 
@@ -46,9 +75,11 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### 默认账号
 
+> 首次运行 `./install.sh` 时，admin 密码会**随机生成**并打印到控制台，同时保存到 `data/.admin_password`（chmod 600）。请立即登录并修改。
+
 | 角色 | 用户名 | 密码 |
 |:----|:------|:----|
-| 管理员 | admin | admin123 |
+| 管理员 | admin | (随机，见 install.sh 输出或 `data/.admin_password`) |
 | 编辑者 | editor | editor123 |
 | 查看者 | viewer | viewer123 |
 
@@ -125,14 +156,14 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 1. **登录管理员**
    ```bash
-   TOKEN=$(curl -s http://localhost:8001/api/v1/auth/login \
+   TOKEN=$(curl -s http://localhost:8000/api/v1/auth/login \
      -H 'Content-Type: application/json' \
-     -d '{"username":"admin","password":"admin123"}' | jq -r .access_token)
+     -d '{"username":"admin","password":"<安装时打印的随机密码>"}' | jq -r .access_token)
    ```
 
 2. **添加 Provider**（API key 加密落库）
    ```bash
-   curl -X POST http://localhost:8001/api/v1/admin/providers \
+   curl -X POST http://localhost:8000/api/v1/admin/providers \
      -H "Authorization: Bearer *** \
      -H 'Content-Type: application/json' \
      -d '{
@@ -147,7 +178,7 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 3. **添加 Model**（绑定到 provider）
    ```bash
-   curl -X POST http://localhost:8001/api/v1/admin/models \
+   curl -X POST http://localhost:8000/api/v1/admin/models \
      -H "Authorization: Bearer *** \
      -H 'Content-Type: application/json' \
      -d '{
@@ -160,7 +191,7 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 4. **连通性测试**
    ```bash
-   curl -X POST http://localhost:8001/api/v1/admin/models/test \
+   curl -X POST http://localhost:8000/api/v1/admin/models/test \
      -H "Authorization: Bearer *** \
      -H 'Content-Type: application/json' \
      -d '{"provider_id":1,"model_name":"MiniMax-M3","test_message":"hi"}'
@@ -168,7 +199,7 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 5. **建 A/B 规则**（user_id 哈希 mod 2 决定走哪条模型）
    ```bash
-   curl -X POST http://localhost:8001/api/v1/admin/ab-rules \
+   curl -X POST http://localhost:8000/api/v1/admin/ab-rules \
      -H "Authorization: Bearer *** \
      -H 'Content-Type: application/json' \
      -d '{
@@ -181,7 +212,7 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 6. **普通用户聊天**（后端自动按 A/B 规则选模型）
    ```bash
-   curl -X POST http://localhost:8001/api/v1/chat/query \
+   curl -X POST http://localhost:8000/api/v1/chat/query \
      -H "Authorization: Bearer *** \
      -H 'Content-Type: application/json' \
      -d '{"question":"hi"}'
@@ -190,7 +221,7 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 7. **用户反馈**
    ```bash
-   curl -X POST http://localhost:8001/api/v1/chat/feedback \
+   curl -X POST http://localhost:8000/api/v1/chat/feedback \
      -H "Authorization: Bearer *** \
      -H 'Content-Type: application/json' \
      -d '{"metric_id": 1, "feedback": 1}'
@@ -198,7 +229,7 @@ v1.1 在原有单一 LLM 接入的基础上引入 **多模型路由 + A/B 测试
 
 8. **管理员看指标汇总**
    ```bash
-   curl "http://localhost:8001/api/v1/admin/metrics/summary?days=1" \
+   curl "http://localhost:8000/api/v1/admin/metrics/summary?days=1" \
      -H "Authorization: Bearer *** \
    ```
 
@@ -222,10 +253,9 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 
 ### 端口说明
 
-- **`8001`**：本地开发端口（`./start_server.sh` 启动的容器映射到宿主机的端口）
-- 容器内服务实际监听 `8000`，通过 `docker-compose.yml` 映射到宿主机 `8001`
-- 访问 Swagger UI：`http://localhost:8001/docs`
-- 访问前端：`http://localhost:8001/`（由后端静态托管）
+- **统一端口 `8000`**：docker compose 已将容器内 `8000` 映射到宿主机 `8000`
+- 访问 Swagger UI：`http://localhost:8000/docs`
+- 访问前端：`http://localhost:8000/`（由后端静态托管）
 
 ### 已知限制
 
