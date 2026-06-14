@@ -54,9 +54,7 @@ class MiniMaxEmbedding:
     """
 
     def __init__(self) -> None:
-        self.api_key: str | None = (
-            os.environ.get("MINIMAX_API_KEY") or os.environ.get("MINIMAX_CN_API_KEY")
-        )
+        self.api_key: str | None = os.environ.get("MINIMAX_API_KEY")
         self.model: str = DEFAULT_EMBO_MODEL
         self._client: httpx.AsyncClient | None = None
 

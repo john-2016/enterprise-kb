@@ -21,6 +21,7 @@ data/logs/*
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/.admin_password
 !data/uploads/.gitkeep
 !data/vector_store/.gitkeep
 !data/logs/.gitkeep

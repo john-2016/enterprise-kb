@@ -154,7 +154,7 @@ class RAGService:
 
         Reads ``MINIMAX_API_KEY`` from the environment.
         """
-        api_key = os.environ.get("MINIMAX_API_KEY") or os.environ.get("MINIMAX_CN_API_KEY")
+        api_key = os.environ.get("MINIMAX_API_KEY")
         if not api_key:
             raise RAGError(
                 "MINIMAX_API_KEY environment variable is not set. "

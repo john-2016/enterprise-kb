@@ -15,9 +15,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment / .env files."""
 
-    # MiniMax API
+    # MiniMax API (built-in provider)
     MINIMAX_API_KEY: str = ""
-    MINIMAX_CN_API_KEY: str = ""  # 兼容两种变量名
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/kb.db"
@@ -48,10 +47,15 @@ class Settings(BaseSettings):
     VECTOR_DIMENSION: int = 1536
     VECTOR_TOP_K: int = 5
 
+    # Encryption (Fernet) — 用于加密 model_providers.api_key_enc
+    # 不强制长度：crypto.py 在使用时再校验（dev 环境方便测试）
+    ENCRYPTION_KEY: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",
     )
 
 
