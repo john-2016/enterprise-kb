@@ -59,14 +59,23 @@
         <div class="user-info">加载中...</div>
       </div>
       <nav class="nav">
-        <div class="nav-item active" data-page="chat" onclick="showPage('chat')">
+        <div class="nav-item active" data-page="chat" data-route="#/chat" onclick="window.location.hash='#/chat'">
           <span class="icon">💬</span> 智能问答
         </div>
         <div class="nav-item" data-page="docs" onclick="showPage('docs')">
           <span class="icon">📄</span> 文档管理
         </div>
+        <div class="nav-item" data-page="admin" data-route="#/admin/models" onclick="window.location.hash='#/admin/models'">
+          <span class="icon">⚙️</span> 模型管理
+        </div>
+        <div class="nav-item" data-page="ab-tests" data-route="#/admin/ab-tests" onclick="window.location.hash='#/admin/ab-tests'" style="display:none">
+          <span class="icon">🧪</span> A/B 规则
+        </div>
+        <div class="nav-item" data-page="metrics" data-route="#/admin/metrics" onclick="window.location.hash='#/admin/metrics'" style="display:none">
+          <span class="icon">📊</span> 仪表盘
+        </div>
         <div class="nav-item" data-page="admin" onclick="showPage('admin')">
-          <span class="icon">⚙️</span> 系统管理
+          <span class="icon">👥</span> 用户管理
         </div>
       </nav>
       <div class="sidebar-footer">
@@ -134,7 +143,7 @@
         </div>
       </div>
 
-      <!-- Admin Page -->
+      <!-- Admin Page (legacy: user management) -->
       <div class="page" id="page-admin">
         <div class="admin-header">
           <h1>⚙️ 系统管理</h1>
@@ -151,6 +160,17 @@
             <tbody id="users-table-tbody"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Admin SPA Pages (Phase 6) -->
+      <div class="page" id="page-admin-models">
+        <div id="admin-models-root"></div>
+      </div>
+      <div class="page" id="page-admin-ab-tests">
+        <div id="admin-ab-tests-root"></div>
+      </div>
+      <div class="page" id="page-admin-metrics">
+        <div id="admin-metrics-root"></div>
       </div>
     </div>
   </div>
@@ -183,5 +203,9 @@
   </div>
 
   <script src="js/app.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/admin-models.js"></script>
+  <script src="js/admin-ab-tests.js"></script>
+  <script src="js/admin-metrics.js"></script>
 </body>
 </html>

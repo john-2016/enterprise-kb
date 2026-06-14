@@ -160,3 +160,41 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .toast-success { background: var(--success); }
 .toast-error { background: var(--danger); }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Phase 6 — Admin SPA + Chat feedback */
+.admin-spa { padding: 24px; }
+.admin-spa h1 { font-size: 20px; margin-bottom: 16px; }
+.admin-spa h2 { font-size: 15px; margin: 16px 0 8px; }
+.admin-spa .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+.admin-spa .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.admin-spa .provider-card { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 10px; }
+.admin-spa .provider-card.builtin { border-left: 4px solid var(--primary); }
+.admin-spa .model-row { display: grid; grid-template-columns: 2fr 1fr 0.6fr 0.6fr auto auto; gap: 8px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--gray-100); font-size: 13px; }
+.admin-spa .model-row.header { background: var(--gray-50); font-weight: 600; color: var(--gray-500); font-size: 12px; text-transform: uppercase; border-top: none; }
+.admin-spa .star { cursor: pointer; font-size: 18px; color: var(--gray-300); user-select: none; background: none; border: none; }
+.admin-spa .star.on { color: var(--warning); }
+.admin-spa .badge-cap { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: var(--gray-100); color: var(--gray-700); }
+.admin-spa .badge-chat { background: #ede9fe; color: #6d28d9; }
+.admin-spa .badge-embedding { background: #dbeafe; color: #1e40af; }
+.admin-spa .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 16px 0; }
+.admin-spa .winner-card { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow); }
+.admin-spa .winner-card .label { font-size: 12px; opacity: 0.85; }
+.admin-spa .winner-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.admin-spa .period-pick { display: inline-flex; border: 1px solid var(--gray-300); border-radius: var(--radius); overflow: hidden; }
+.admin-spa .period-pick button { background: white; border: none; padding: 6px 14px; cursor: pointer; font-size: 13px; color: var(--gray-600); }
+.admin-spa .period-pick button.active { background: var(--primary); color: white; }
+.admin-spa .switch { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+.admin-spa .switch input { opacity: 0; width: 0; height: 0; }
+.admin-spa .slider { position: absolute; inset: 0; background: var(--gray-300); border-radius: 20px; transition: 0.2s; }
+.admin-spa .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+.admin-spa .switch input:checked + .slider { background: var(--success); }
+.admin-spa .switch input:checked + .slider::before { transform: translateX(16px); }
+.admin-spa textarea.json { font-family: ui-monospace, monospace; font-size: 12px; min-height: 120px; width: 100%; padding: 8px 10px; border: 1px solid var(--gray-300); border-radius: var(--radius); }
+.message .feedback-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--gray-100); }
+.message .feedback-row .model-tag { font-size: 11px; color: var(--gray-500); background: var(--gray-100); padding: 2px 8px; border-radius: 10px; }
+.message .fb-btn { background: none; border: 1px solid var(--gray-200); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.message .fb-btn:hover { background: var(--gray-50); }
+.message .fb-btn.active-up { background: #dcfce7; border-color: var(--success); }
+.message .fb-btn.active-down { background: #fee2e2; border-color: var(--danger); }
+.message .fb-text { display: flex; gap: 6px; margin-top: 6px; }
+.message .fb-text input { flex: 1; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: 6px; font-size: 13px; }
