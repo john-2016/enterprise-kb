@@ -12,7 +12,10 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+# Phase 7 fix: 避免 model_used / model_name 字段与 Pydantic 保留命名空间冲突
+_PYDANTIC_CONFIG = ConfigDict(protected_namespaces=())
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,6 +57,7 @@ def _default_router_client(provider, decrypted_key: str):
 # ---------------------------------------------------------------------------
 
 class SourceItem(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     doc_id: str
     title: str
     chunk_index: int
@@ -62,12 +66,14 @@ class SourceItem(BaseModel):
 
 
 class QueryRequest(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     question: str = Field(..., min_length=1, max_length=4000)
     kb_id: int | None = Field(None, description="Optional knowledge-base ID filter")
     top_k: int = Field(default=5, ge=1, le=50)
 
 
 class ModelUsedInfo(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """实际选用的模型信息（多模型支持后追加）。"""
 
     id: int | None = None
@@ -78,6 +84,7 @@ class ModelUsedInfo(BaseModel):
 
 
 class TokenUsage(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """分项 token 计数。"""
 
     input: int = 0
@@ -85,6 +92,7 @@ class TokenUsage(BaseModel):
 
 
 class QueryResponse(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     answer: str
     sources: list[SourceItem]
     tokens_used: int
@@ -95,6 +103,7 @@ class QueryResponse(BaseModel):
 
 
 class HistoryItem(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     id: int
     question: str
     answer_preview: str | None = None
@@ -104,17 +113,20 @@ class HistoryItem(BaseModel):
 
 
 class HistoryResponse(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     items: list[HistoryItem]
     total: int
 
 
 class FeedbackRequest(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     metric_id: int = Field(..., description="ABTestMetric 主键")
     feedback: int = Field(..., ge=-1, le=1, description="-1=👎, 0=中性, 1=👍")
     feedback_text: str | None = Field(None, max_length=2000)
 
 
 class FeedbackResponse(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     success: bool
     metric_id: int
 

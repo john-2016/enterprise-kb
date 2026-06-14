@@ -22,6 +22,8 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_PYDANTIC_CONFIG = ConfigDict(protected_namespaces=())
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +42,7 @@ _ALLOWED_MODEL_TYPES = {"chat", "embedding"}
 
 
 class ModelCreate(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     provider_id: int
     model_name: str = Field(..., min_length=1, max_length=128)
     display_name: str = Field(..., min_length=1, max_length=128)
@@ -60,6 +63,7 @@ class ModelCreate(BaseModel):
 
 
 class ModelUpdate(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     display_name: Optional[str] = Field(None, min_length=1, max_length=128)
     model_type: Optional[str] = None
     context_window: Optional[int] = Field(None, ge=1)
@@ -81,7 +85,8 @@ class ModelUpdate(BaseModel):
 
 
 class ModelResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    # Phase 7 fix: 合并 from_attributes + protected_namespaces=()
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     id: int
     provider_id: int

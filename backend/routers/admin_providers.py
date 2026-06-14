@@ -22,6 +22,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+
+_PYDANTIC_CONFIG = ConfigDict(protected_namespaces=())
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +41,7 @@ router = APIRouter(prefix="/api/v1/admin/providers", tags=["admin-providers"])
 
 
 class ProviderCreate(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     name: str = Field(..., min_length=1, max_length=64)
     display_name: str = Field(..., min_length=1, max_length=128)
     provider_type: str = Field(..., min_length=1, max_length=32)
@@ -48,6 +51,7 @@ class ProviderCreate(BaseModel):
 
 
 class ProviderUpdate(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     display_name: Optional[str] = Field(None, min_length=1, max_length=128)
     api_base_url: Optional[str] = Field(None, max_length=512)
     api_key: Optional[str] = Field(None, min_length=1)
@@ -56,7 +60,7 @@ class ProviderUpdate(BaseModel):
 
 
 class ProviderResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     id: int
     name: str

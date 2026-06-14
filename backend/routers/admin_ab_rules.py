@@ -29,6 +29,8 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+
+_PYDANTIC_CONFIG = ConfigDict(protected_namespaces=())
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +52,7 @@ _WEIGHT_SUM_TOLERANCE = 0.01
 
 
 class ABRuleCreate(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """创建 A/B 规则请求体。"""
 
     name: str = Field(..., min_length=1, max_length=128)
@@ -61,6 +64,7 @@ class ABRuleCreate(BaseModel):
 
 
 class ABRuleUpdate(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """部分更新 A/B 规则 — 所有字段可选。"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=128)
@@ -74,7 +78,7 @@ class ABRuleUpdate(BaseModel):
 class ABRuleResponse(BaseModel):
     """A/B 规则响应。"""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     id: int
     name: str

@@ -24,7 +24,9 @@ import time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+_PYDANTIC_CONFIG = ConfigDict(protected_namespaces=())
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,6 +64,7 @@ def _provider_proxy(p: ModelProvider) -> _ProviderProxy:
 
 
 class ModelMetricRow(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """单个模型在指定时间窗口内的聚合指标。"""
 
     model_id: int
@@ -76,6 +79,7 @@ class ModelMetricRow(BaseModel):
 
 
 class MetricsSummaryResponse(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """Metrics summary 响应。"""
 
     period_days: int
@@ -89,6 +93,7 @@ class MetricsSummaryResponse(BaseModel):
 
 
 class ConnectivityTestRequest(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """Connectivity 测试请求体。"""
 
     provider_id: int
@@ -97,6 +102,7 @@ class ConnectivityTestRequest(BaseModel):
 
 
 class ConnectivityTestResponse(BaseModel):
+    model_config = _PYDANTIC_CONFIG
     """Connectivity 测试响应（统一结构，失败时仍返回 200 + success=False）。"""
 
     success: bool
