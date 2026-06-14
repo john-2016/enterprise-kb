@@ -119,10 +119,10 @@ async function sendMessage(e) {
       body: JSON.stringify({ question: msg, top_k: 5 })
     });
     typing.style.display = 'none';
-    addAssistantMessage(data.answer, data.sources || []);
+    addAssistantMessage(data.answer, data.sources || [], data);
   } catch (err) {
     typing.style.display = 'none';
-    addAssistantMessage('抱歉，查询出错: ' + err.message);
+    addAssistantMessage('抱歉，查询出错: ' + err.message, [], { model_used: null });
   }
 }
 
@@ -134,7 +134,8 @@ function addMessage(text, role) {
   scrollChat();
 }
 
-function addAssistantMessage(text, sources) {
+function addAssistantMessage(text, sources, meta) {
+  // meta is optional { model_used: { id, name, provider } }
   const div = document.createElement('div');
   div.className = 'message assistant';
 
@@ -158,8 +159,57 @@ function addAssistantMessage(text, sources) {
     div.appendChild(details);
   }
 
+  // Phase 6.5 — model tag + feedback buttons
+  const footer = document.createElement('div');
+  footer.className = 'feedback-row';
+
+  const modelName = meta?.model_used?.name || (meta?.model_used?.id != null ? `#${meta.model_used.id}` : 'unknown');
+  const tag = document.createElement('span');
+  tag.className = 'model-tag';
+  tag.textContent = `via ${modelName}`;
+  footer.appendChild(tag);
+
+  const upBtn = document.createElement('button');
+  upBtn.type = 'button';
+  upBtn.className = 'fb-btn';
+  upBtn.title = '有用';
+  upBtn.textContent = '👍';
+  const downBtn = document.createElement('button');
+  downBtn.type = 'button';
+  downBtn.className = 'fb-btn';
+  downBtn.title = '没帮助';
+  downBtn.textContent = '👎';
+  footer.appendChild(upBtn);
+  footer.appendChild(downBtn);
+
+  div.appendChild(footer);
+
+  // Wire feedback handlers (clicks use closure over meta)
+  const payload = { metric_id: meta?.model_used?.id };
+  upBtn.addEventListener('click', () => submitFeedback(payload, 1, null, upBtn, downBtn));
+  downBtn.addEventListener('click', () => {
+    const text = prompt('请描述一下哪里没帮助 (可选):');
+    submitFeedback(payload, -1, text || null, upBtn, downBtn);
+  });
+
   document.getElementById('chat-messages').appendChild(div);
   scrollChat();
+}
+
+async function submitFeedback(payload, value, text, upBtn, downBtn) {
+  // Backend Pydantic: { metric_id: int, feedback: -1|0|1, feedback_text?: str }
+  const body = { ...payload, feedback: value };
+  if (text) body.feedback_text = text;
+  try {
+    await api('/chat/feedback', { method: 'POST', body: JSON.stringify(body) });
+    toast(value > 0 ? '👍 已记录反馈' : '👎 已记录反馈，谢谢');
+    upBtn.disabled = true;
+    downBtn.disabled = true;
+    if (value > 0) upBtn.classList.add('active-up');
+    else downBtn.classList.add('active-down');
+  } catch (e) {
+    toast('反馈失败: ' + e.message, 'error');
+  }
 }
 
 function scrollChat() {
