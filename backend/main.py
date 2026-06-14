@@ -8,10 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings, validate_security_settings
-from backend.database import Base, get_engine, init_db
+from backend.database import Base, get_engine, init_db, AsyncSessionLocal
 from backend.models import User, Document, KnowledgeBase, DocumentKB, AuditLog
 from backend.routers import auth, documents, chat, admin
 from backend.routers import admin_providers, admin_models, admin_ab_rules
+from backend.routers import admin_metrics
 from backend.services.embedding_service import MiniMaxEmbedding, VectorStore
 
 DATA_DIR = Path(settings.DATA_DIR)
@@ -38,6 +39,20 @@ async def lifespan(app: FastAPI):
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # 1.5 v1 → v2 auto migration (Phase 5 — seed built-in minimax provider if missing)
+    try:
+        from backend.scripts.migrate_v1_to_v2 import migrate  # type: ignore  # noqa: E402
+    except Exception:  # pragma: no cover
+        # Package-relative import path (used when imported as `scripts.migrate_v1_to_v2`)
+        from scripts.migrate_v1_to_v2 import migrate  # type: ignore  # noqa: E402
+
+    try:
+        async with AsyncSessionLocal() as _s:
+            await migrate(_s)
+    except Exception as _exc:  # pragma: no cover — boot must not break
+        import logging as _logging
+        _logging.getLogger("kb.startup").warning("v1→v2 migration skipped: %s", _exc)
 
     # 2. Embedding service (MiniMax embo-01)
     embedding_service = MiniMaxEmbedding()
@@ -89,6 +104,7 @@ if admin_models.router is not None:
     app.include_router(admin_models.router)
 if admin_ab_rules.router is not None:
     app.include_router(admin_ab_rules.router)
+app.include_router(admin_metrics.router)
 
 # Frontend SPA — catch-all mount AFTER API routes
 static_dir = Path(__file__).resolve().parent.parent / "frontend"
