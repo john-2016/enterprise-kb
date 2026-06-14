@@ -73,6 +73,8 @@ class ModelUsedInfo(BaseModel):
     id: int | None = None
     name: str | None = None
     provider: str | None = None
+    # Phase 6 fix: ABTestMetric 主键 — chat/feedback 需要这个做 metric_id
+    metric_id: int | None = None
 
 
 class TokenUsage(BaseModel):
@@ -272,6 +274,7 @@ async def query_knowledge_base(
         provider_name = "unknown"
 
     # ---------- 5) 落 ABTestMetric ----------
+    metric_id_returned: int | None = None
     try:
         rule_id = rules[0].id if rules else None
         if primary_model is not None:
@@ -286,6 +289,8 @@ async def query_knowledge_base(
             )
             db.add(metric)
             await db.commit()
+            await db.refresh(metric)
+            metric_id_returned = metric.id
     except Exception:
         await db.rollback()
         logger.exception("ABTestMetric write failed (non-fatal)")
@@ -320,6 +325,7 @@ async def query_knowledge_base(
             id=primary_model.id if primary_model else None,
             name=primary_model.model_name if primary_model else None,
             provider=provider_name,
+            metric_id=metric_id_returned,
         ),
         latency_ms=latency_ms,
         tokens=TokenUsage(

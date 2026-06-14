@@ -146,6 +146,9 @@ async def test_query_response_includes_model_used(
     assert mu["id"] == mid
     assert mu["name"] == "gpt-4o-mini"
     assert mu["provider"] == "p_query_ok"
+    # Phase 6 fix: ABTestMetric 主键
+    assert mu["metric_id"] is not None
+    assert isinstance(mu["metric_id"], int)
     # latency_ms / tokens
     assert isinstance(data["latency_ms"], int)
     assert data["latency_ms"] >= 0

@@ -185,7 +185,8 @@ function addAssistantMessage(text, sources, meta) {
   div.appendChild(footer);
 
   // Wire feedback handlers (clicks use closure over meta)
-  const payload = { metric_id: meta?.model_used?.id };
+  // Phase 6 fix: 用 ABTestMetric 主键 (metric_id) 而非 ModelConfig.id
+  const payload = { metric_id: meta?.model_used?.metric_id ?? meta?.model_used?.id };
   upBtn.addEventListener('click', () => submitFeedback(payload, 1, null, upBtn, downBtn));
   downBtn.addEventListener('click', () => {
     const text = prompt('请描述一下哪里没帮助 (可选):');
