@@ -53,7 +53,6 @@ async def test_seed_creates_minimax_provider_with_encrypted_key(
     from backend import config as cfg
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "test-key-1234567890", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     result = await seed_default_models(db_session)
 
@@ -91,7 +90,6 @@ async def test_seed_creates_chat_and_embedding_models(
     from backend import config as cfg
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "another-test-key", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     result = await seed_default_models(db_session)
 
@@ -157,7 +155,6 @@ async def test_seed_is_idempotent_on_repeat_calls(
     from backend import config as cfg
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "idempotent-key", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     first = await seed_default_models(db_session)
     second = await seed_default_models(db_session)
@@ -199,7 +196,6 @@ async def test_seed_works_without_api_key_env(
     from backend import config as cfg
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     result = await seed_default_models(db_session)
     assert result["provider_created"] is True

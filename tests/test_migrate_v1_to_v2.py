@@ -43,7 +43,6 @@ async def test_migrate_from_empty_tables_seeds_defaults(
     from backend import config as cfg
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "migrate-test-key", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     # Sanity: tables really are empty
     assert (await db_session.execute(select(ModelProvider))).scalars().all() == []
@@ -102,7 +101,6 @@ async def test_migrate_skips_when_already_seeded(
     from scripts.seed import seed_default_models
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "already-seeded-key", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     # First migration: v1 -> v2
     first = await migrate(db_session)
@@ -156,7 +154,6 @@ async def test_migrate_three_consecutive_calls_keep_table_count_stable(
     from backend import config as cfg
 
     monkeypatch.setattr(cfg.settings, "MINIMAX_API_KEY", "stable-key", raising=False)
-    monkeypatch.setattr(cfg.settings, "MINIMAX_CN_API_KEY", "", raising=False)
 
     r1 = await migrate(db_session)
     r2 = await migrate(db_session)

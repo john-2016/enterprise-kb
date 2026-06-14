@@ -15,9 +15,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment / .env files."""
 
-    # MiniMax API
+    # MiniMax API (built-in provider)
     MINIMAX_API_KEY: str = ""
-    MINIMAX_CN_API_KEY: str = ""  # 兼容两种变量名
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/kb.db"
@@ -56,6 +55,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="ignore",
     )
 
 

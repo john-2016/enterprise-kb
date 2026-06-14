@@ -51,7 +51,7 @@ async def one_query(
 
 async def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--base-url", default=os.environ.get("LOADTEST_BASE_URL", "http://localhost:8001"))
+    p.add_argument("--base-url", default=os.environ.get("LOADTEST_BASE_URL", "http://localhost:8000"))
     p.add_argument("--username", default=os.environ.get("LOADTEST_USER", "viewer"))
     p.add_argument("--password", default=os.environ.get("LOADTEST_PASS", "viewer123"))
     p.add_argument("--admin-user", default=os.environ.get("LOADTEST_ADMIN", "admin"))

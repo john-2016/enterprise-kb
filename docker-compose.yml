@@ -22,10 +22,8 @@ services:
     build: .
     container_name: enterprise-kb-app
     ports:
-      - "8001:8000"
+      - "8000:8000"
     environment:
-      # 关键：把两个 key 都注入，兼容 embedding_service 的 fallback
-      MINIMAX_CN_API_KEY: ${MINIMAX_CN_API_KEY}
       MINIMAX_API_KEY: ${MINIMAX_API_KEY}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-use-a-random-secret}
       DATABASE_URL: postgresql+asyncpg://kb_user:kb_pass@postgres:5432/enterprise_kb

@@ -18,9 +18,9 @@ This module is split into two responsibilities:
    + model_name``) and skipped.
 
 Encryption:
-- ``MINIMAX_API_KEY`` (or ``MINIMAX_CN_API_KEY`` as fallback) is encrypted with
-  Fernet via ``backend.core.crypto.encrypt_key`` and stored as
-  ``ModelProvider.api_key_enc`` bytes. Plaintext is **never** persisted.
+- ``MINIMAX_API_KEY`` is encrypted with Fernet via ``backend.core.crypto.encrypt_key``
+  and stored as ``ModelProvider.api_key_enc`` bytes. Plaintext is **never**
+  persisted.
 """
 import asyncio
 import logging
@@ -80,12 +80,8 @@ async def main() -> None:
 
 
 def _resolve_minimax_api_key() -> Optional[str]:
-    """Pick whichever env var the operator actually populated."""
-    return (
-        settings.MINIMAX_API_KEY
-        or settings.MINIMAX_CN_API_KEY
-        or None
-    )
+    """Return the operator-configured MiniMax API key (may be empty)."""
+    return settings.MINIMAX_API_KEY or None
 
 
 async def seed_default_models(session: AsyncSession) -> dict[str, int | bool]:
