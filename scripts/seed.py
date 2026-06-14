@@ -55,6 +55,48 @@ DEFAULT_EMB_MODEL_DISPLAY = "embo-01 Embeddings"
 DEFAULT_EMB_CONTEXT_WINDOW = 8192
 
 
+async def bootstrap_admin(session: AsyncSession) -> None:
+    """Create bootstrap users on a fresh install.
+
+    Idempotent: if the admin user already exists, nothing is done. On a fresh
+    install, the admin password is randomly generated and persisted to
+    ``data/.admin_password`` so install.sh can read it back and print it.
+
+    Called by:
+      - ``main()`` (manual ``python -m scripts.seed``)
+      - the FastAPI lifespan startup hook in ``backend/main.py`` (auto-run
+        on every container start, so fresh ``./install.sh`` always works
+        without any extra operator step).
+    """
+    existing_admin = await _user_exists(session, "admin")
+    if existing_admin:
+        return
+
+    import secrets as _secrets
+    admin_pwd = _secrets.token_urlsafe(16)
+    _write_admin_password_file(admin_pwd)
+    print("=" * 60)
+    print("✓ First-time install detected.")
+    print("  Admin user:  admin")
+    print(f"  Random pass: {admin_pwd}")
+    print("  (Saved to: data/.admin_password, chmod 600)")
+    print("  ⚠️  Log in and change this password immediately.")
+    print("=" * 60)
+    await register_user(
+        session, "admin", "admin@example.com", admin_pwd, role="admin"
+    )
+
+    # Editor / viewer: keep simple defaults for dev convenience
+    editor = await register_user(
+        session, "editor", "editor@example.com", "editor123", role="editor"
+    )
+    print(f"✓ Editor user created: {editor['username']} / editor123")
+    viewer = await register_user(
+        session, "viewer", "viewer@example.com", "viewer123", role="viewer"
+    )
+    print(f"✓ Viewer user created: {viewer['username']} / viewer123")
+
+
 async def main() -> None:
     """Legacy entry — bootstrap users for manual smoke testing.
 
@@ -65,41 +107,13 @@ async def main() -> None:
     """
     await database.init_db(settings.DATABASE_URL)
     engine = database.get_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(database.Base.metadata.create_all)
-
     async with database.AsyncSessionLocal() as session:
-        # Detect first install
         existing_admin = await _user_exists(session, "admin")
         if existing_admin:
             print("✓ Admin user already exists — leaving passwords unchanged.")
         else:
-            import secrets as _secrets
-            admin_pwd = _secrets.token_urlsafe(16)
-            _write_admin_password_file(admin_pwd)
-            print("=" * 60)
-            print("✓ First-time install detected.")
-            print(f"  Admin user:  admin")
-            print(f"  Random pass: {admin_pwd}")
-            print(f"  (Saved to: data/.admin_password, chmod 600)")
-            print("  ⚠️  Log in and change this password immediately.")
-            print("=" * 60)
-            await register_user(
-                session, "admin", "admin@example.com", admin_pwd, role="admin"
-            )
-
-        # Editor / viewer: keep simple defaults for dev convenience
-        editor = await register_user(
-            session, "editor", "editor@example.com", "editor123", role="editor"
-        )
-        if not existing_admin:
-            print(f"✓ Editor user created: {editor['username']} / editor123")
-
-        viewer = await register_user(
-            session, "viewer", "viewer@example.com", "viewer123", role="viewer"
-        )
-        if not existing_admin:
-            print(f"✓ Viewer user created: {viewer['username']} / viewer123")
+            await bootstrap_admin(session)
+        await session.commit()
 
 
 async def _user_exists(session: AsyncSession, username: str) -> bool:

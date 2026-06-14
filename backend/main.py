@@ -51,6 +51,15 @@ async def lifespan(app: FastAPI):
     try:
         async with _database.AsyncSessionLocal() as _s:
             await migrate(_s)
+            # Phase D: bootstrap admin user + random password on fresh install.
+            # Idempotent: no-op if admin already exists.
+            try:
+                from scripts.seed import bootstrap_admin  # type: ignore  # noqa: E402
+                await bootstrap_admin(_s)
+                await _s.commit()
+            except Exception as _seed_exc:  # pragma: no cover
+                import logging as _logging
+                _logging.getLogger("kb.startup").warning("admin bootstrap skipped: %s", _seed_exc)
     except Exception as _exc:  # pragma: no cover — boot must not break
         import logging as _logging
         _logging.getLogger("kb.startup").warning("v1→v2 migration skipped: %s", _exc)
