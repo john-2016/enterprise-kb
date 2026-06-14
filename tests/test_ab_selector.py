@@ -26,13 +26,21 @@ def _make_model(
     *,
     is_default_chat: bool = False,
     is_default_emb: bool = False,
+    model_type: str | None = None,
 ):
     """构造一个 model-like 对象，字段名对齐 ModelConfig ORM。"""
+    if model_type is None:
+        # 兼容旧调用：is_default_chat 暗示 model_type=chat
+        if is_default_emb:
+            model_type = "embedding"
+        elif is_default_chat:
+            model_type = "chat"
     return SimpleNamespace(
         id=model_id,
         model_name=name,
         is_default_chat=is_default_chat,
         is_default_emb=is_default_emb,
+        model_type=model_type,
     )
 
 
@@ -174,3 +182,42 @@ def test_target_mismatch_rule_ignored():
     )
     selected = select_model_by_ab(user_id=0, target="chat", rules=[rule], all_models=models)
     assert selected.model_name == "default-chat"
+
+
+# ---------- 7. Phase 7 fix: mapping 引用错误能力的模型 → fall through 到默认 ----------
+
+def test_mapping_to_wrong_capability_falls_through():
+    """Bug fix: chat 规则的 mapping 引用了 embedding 模型，应 fall through 到默认 chat 模型。"""
+    models = [
+        _make_model(1, "default-chat", model_type="chat", is_default_chat=True),
+        _make_model(2, "alt-chat", model_type="chat"),
+        _make_model(3, "emb-model", model_type="embedding", is_default_emb=True),
+    ]
+    rule = _make_rule(
+        "user_hash_mod",
+        {"mod": 2, "mapping": {"0": "emb-model", "1": "emb-model"}},
+        target="chat",
+    )
+    # user_id=0 → bucket 0 → "emb-model" 是 embedding 模型 → selector 应跳过规则 → 回落到 default-chat
+    selected = select_model_by_ab(user_id=0, target="chat", rules=[rule], all_models=models)
+    assert selected.model_name == "default-chat"
+
+
+def test_mapping_with_mixed_capability_only_picks_chat():
+    """Bug fix: mapping 同时含 chat 和 embedding 模型，chat target 只选 chat 模型。"""
+    models = [
+        _make_model(1, "default-chat", model_type="chat", is_default_chat=True),
+        _make_model(2, "alt-chat", model_type="chat"),
+        _make_model(3, "emb-model", model_type="embedding", is_default_emb=True),
+    ]
+    rule = _make_rule(
+        "user_hash_mod",
+        {"mod": 2, "mapping": {"0": "alt-chat", "1": "emb-model"}},
+        target="chat",
+    )
+    # user_id=0 → bucket 0 → "alt-chat" 是 chat 模型 ✓
+    selected0 = select_model_by_ab(user_id=0, target="chat", rules=[rule], all_models=models)
+    assert selected0.model_name == "alt-chat"
+    # user_id=1 → bucket 1 → "emb-model" 是 embedding → skip rule → default
+    selected1 = select_model_by_ab(user_id=1, target="chat", rules=[rule], all_models=models)
+    assert selected1.model_name == "default-chat"

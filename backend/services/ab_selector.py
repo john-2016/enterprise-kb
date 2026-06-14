@@ -72,6 +72,22 @@ def _get_default(target: str, all_models: Sequence[ModelLike]) -> ModelLike | No
     return None
 
 
+def _model_matches_target(model: ModelLike, target: str) -> bool:
+    """判断 model 能否服务 target (chat|embedding)。
+
+    优先用 ``model_type`` 字段（最准），否则用 ``is_default_chat/is_default_emb`` 标志。
+    """
+    mt = getattr(model, "model_type", None)
+    if mt:
+        if target == "embedding":
+            return mt == "embedding"
+        return mt == "chat"
+    # fallback：用 default 标志（如果两者都是 False，无法判断 — 保守按 chat 处理）
+    if target == "embedding":
+        return bool(getattr(model, "is_default_emb", False))
+    return bool(getattr(model, "is_default_chat", False)) or not getattr(model, "is_default_emb", False)
+
+
 def _find_by_name(name: str, all_models: Sequence[ModelLike]) -> ModelLike | None:
     """按 model_name 找模型。"""
     for m in all_models:
@@ -164,8 +180,9 @@ def select_model_by_ab(
 
     流程：
     1. 过滤出 target 匹配 & enabled=True 的规则
-    2. 用第一条匹配的规则计算模型
-    3. 无规则 / 都不匹配 → 走默认
+    2. 把 all_models 限制为能服务 target 的子集（防止 mapping 引用到错误能力的模型）
+    3. 用第一条匹配的规则计算模型；规则抛错（映射错误/未知模型）→ fall through
+    4. 无规则 / 都不匹配 → 走默认
 
     :param user_id: 用户 ID（int）
     :param target: ``"chat"`` 或 ``"embedding"``
@@ -174,6 +191,10 @@ def select_model_by_ab(
     :returns: 选中的模型
     :raises ValueError: 找不到可用模型
     """
+    # Bug fix (Phase 7): 把 all_models 限定为能服务 target 的子集，
+    # 防止 mapping/weights 引用到错误能力的模型（如 chat 规则路由到 embedding 模型）。
+    target_models = [m for m in all_models if _model_matches_target(m, target)]
+
     for rule in rules or []:
         # 跳过 disabled 或 target 不匹配的
         if not getattr(rule, "enabled", True):
@@ -190,10 +211,14 @@ def select_model_by_ab(
 
         cfg = dict(getattr(rule, "config", None) or {})
 
-        if strategy is ABStrategy.USER_HASH_MOD:
-            return _apply_user_hash_mod(user_id, cfg, all_models)
-        if strategy is ABStrategy.RANDOM_WEIGHT:
-            return _apply_random_weight(user_id, cfg, all_models)
+        # Bug fix (Phase 7): 规则抛错（mapping bucket 缺失 / 引用了不存在或能力不符的模型）→ fall through
+        try:
+            if strategy is ABStrategy.USER_HASH_MOD:
+                return _apply_user_hash_mod(user_id, cfg, target_models)
+            if strategy is ABStrategy.RANDOM_WEIGHT:
+                return _apply_random_weight(user_id, cfg, target_models)
+        except ValueError:
+            continue
 
         # 未知 strategy：跳过（不抛错，让其它规则或默认接手）
         continue
